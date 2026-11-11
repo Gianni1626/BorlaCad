@@ -703,7 +703,7 @@ html.fs101 body::before{height:var(--fsTop,44px);background:var(--bg)}
 
 <div id="app">
   <header class="top">
-    <div class="brand"><div class="bt"><b>Borla CAD</b><small id="revLbl">Rev121</small></div><span id="fname">—</span></div>
+    <div class="brand"><div class="bt"><b>Borla CAD</b><small id="revLbl">Rev122</small></div><span id="fname">—</span></div>
     <div class="grp">
       <button class="btn pri" id="bOpen" title="Apri file STEP/IGES dal computer o dal dispositivo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h6l2 2h10v10H3z"/></svg>Apri</button>
       <button class="btn ic" id="bUndo" title="Annulla (Ctrl/⌘+Z)" aria-label="Annulla" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
@@ -18907,6 +18907,45 @@ function polySegSel121(j) {
     syncPolyUI();
   }
   Object.assign(HELP, {});
+}
+
+/* =====================================================================
+   Rev122 — pagina intera su iPad (Safari) che si perde durante pan /
+   rotazione con la rotella premuta.
+   Causa: in Safari per iPad la pagina intera ha i propri gesti di sistema
+   per chiuderla (trascinamento verso il basso, pizzico): il trascinamento
+   col mouse viene a volte preso per quel gesto e Safari chiude la pagina
+   intera. Una pagina web non può bloccare quei gesti.
+   Ora: se la pagina intera si chiude mentre si sta trascinando sul modello
+   (e non col tasto del programma o Esc), torna da sola al rilascio del
+   tasto o del dito. Se la chiudi col tasto ⛶, con Esc o con la ✕ di Safari
+   resta chiusa.
+   ===================================================================== */
+const FS122 = { want: false, re: false, down: 0, last: 0, manual: 0, esc: 0 };
+{
+  const D = document, E = D.documentElement;
+  const isFs = () => !!(D.fullscreenElement || D.webkitFullscreenElement);
+  const enter = () => { try { const r = E.requestFullscreen ? E.requestFullscreen({ navigationUI: 'hide' }) : E.webkitRequestFullscreen ? E.webkitRequestFullscreen() : null; if (r && r.catch) r.catch(() => {}); } catch (e) {} };
+  const ptrs = new Set();
+  window.addEventListener('pointerdown', e => { ptrs.add(e.pointerId); FS122.down = ptrs.size; FS122.last = performance.now(); }, true);
+  const up = e => {
+    ptrs.delete(e.pointerId); FS122.down = ptrs.size; FS122.last = performance.now();
+    if (FS122.re && !ptrs.size && !isFs()) { FS122.re = false; enter(); }
+  };
+  window.addEventListener('pointerup', up, true);
+  window.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); FS122.down = ptrs.size; FS122.last = performance.now(); }, true);
+  window.addEventListener('touchend', () => { if (FS122.re && !isFs()) { FS122.re = false; enter(); } }, true);
+  window.addEventListener('keydown', e => { if (e.key === 'Escape') FS122.esc = performance.now(); else if (FS122.re && !isFs()) { FS122.re = false; enter(); } }, true);
+  const b = $('#bFull'); if (b) b.addEventListener('click', () => { FS122.manual = performance.now(); }, true);
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach(t => D.addEventListener(t, () => {
+    const now = performance.now();
+    if (isFs()) { FS122.want = true; FS122.re = false; return; }
+    if (!FS122.want) return;
+    const byUser = now - FS122.manual < 1500 || now - FS122.esc < 1500 || (typeof FS120 !== 'undefined' && FS120.back);
+    const dragging = FS122.down > 0 || now - FS122.last < 400;
+    if (!byUser && dragging) { FS122.re = true; if (!FS122.down) { FS122.re = false; enter(); } }
+    else FS122.want = false;
+  }));
 }
 
 /* ---------- vista ---------- */
