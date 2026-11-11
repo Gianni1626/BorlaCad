@@ -699,11 +699,19 @@ html.fs101 body::before{height:var(--fsTop,44px);background:var(--bg)}
 
 /* Rev116: menu a tendina leggibili nel pannello */
 .rdock select.dinp{min-width:120px;max-width:100%}
+/* Rev123: barra di scorrimento della struttura */
+#pTree .pb{scrollbar-width:none;padding-right:16px}
+#pTree .pb::-webkit-scrollbar{display:none}
+.sb123{position:absolute;right:2px;width:14px;border-radius:7px;background:rgba(255,255,255,.05);z-index:5;touch-action:none;cursor:pointer}
+.sb123t{width:10px;margin-left:2px;border-radius:5px;background:var(--line2,#4a5361);transition:background .12s}
+.sb123:hover .sb123t,.sb123.on .sb123t{background:#1aa39a}
+#pTree .ph .ib123{width:28px;height:26px;padding:0;display:inline-grid;place-items:center;margin-right:4px}
+#pTree .ph .ib123 svg{width:16px;height:16px}
 </style>
 
 <div id="app">
   <header class="top">
-    <div class="brand"><div class="bt"><b>Borla CAD</b><small id="revLbl">Rev122</small></div><span id="fname">—</span></div>
+    <div class="brand"><div class="bt"><b>Borla CAD</b><small id="revLbl">Rev124</small></div><span id="fname">—</span></div>
     <div class="grp">
       <button class="btn pri" id="bOpen" title="Apri file STEP/IGES dal computer o dal dispositivo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h6l2 2h10v10H3z"/></svg>Apri</button>
       <button class="btn ic" id="bUndo" title="Annulla (Ctrl/⌘+Z)" aria-label="Annulla" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
@@ -9698,7 +9706,7 @@ buildTree = function () {
   }
   function nodeEl(t, depth, parent) {
     if (t.leaf) return partRow(t, depth, parent);
-    if (t._open == null) t._open = depth < 1;
+    if (t._open == null) t._open = false;
     const wrap = document.createElement('div'); wrap.className = 'tn asm' + (t._open ? ' open' : '');
     const r = mkRow(); r.style.paddingLeft = (depth * 14) + 'px';
     const all = collect(t);
@@ -15870,7 +15878,7 @@ function tvSyncUI() {
 }
 function tvInfo() {
   const sh = tvSheet(), p = TV.pend, t = TV.tool, i = $('#tvInfo'); if (!i) return;
-  const msg = { sel: 'Tocca una vista, una quota o una nota per selezionarla e spostarla · rotella = zoom · trascina il foglio per spostarlo',
+  const msg = { sel: 'Tocca una vista, una quota o una nota per selezionarla e spostarla · rotella = zoom · rotella premuta per spostarlo · Z = tutto il foglio',
     view: 'Scegli il tipo di vista e tocca il foglio dove metterla',
     sec: p ? 'Tocca il secondo punto della linea di taglio' : 'Tocca il primo punto della linea di taglio su una vista',
     lin: p ? (p.b ? 'Muovi e tocca per la posizione della quota' : 'Tocca il secondo punto') : 'Tocca il primo punto (si aggancia ai vertici)',
@@ -16022,7 +16030,7 @@ function tvHit(sh, x, y) {
       if (id) {
         const v = sh.views.find(q => q.id === id), d = sh.dims.find(q => q.id === id), n = sh.notes.find(q => q.id === id);
         drag = { id, x0: x, y0: y, moved: false, v, d, n, st: v ? { x: v.x, y: v.y, kids: sh.views.filter(q => q.parent === v.id).map(q => ({ q, x: q.x, y: q.y })) } : d ? { off: d.off ? d.off.slice() : null, at: d.at ? d.at.slice() : null } : n ? { x: n.x, y: n.y } : null };
-      } else drag = { pan: true, cx: e.clientX, cy: e.clientY, vb: { ...TV.vb } };
+      } else drag = e.pointerType === 'touch' ? { pan: true, cx: e.clientX, cy: e.clientY, vb: { ...TV.vb } } : null;
       return;
     }
     drag = { tap: true, cx: e.clientX, cy: e.clientY };
@@ -18946,6 +18954,89 @@ const FS122 = { want: false, re: false, down: 0, last: 0, manual: 0, esc: 0 };
     if (!byUser && dragging) { FS122.re = true; if (!FS122.down) { FS122.re = false; enter(); } }
     else FS122.want = false;
   }));
+}
+
+/* =====================================================================
+   Rev123
+   1) Struttura: barra di scorrimento larga (14 px) e sempre presente, che
+      si prende bene col mouse anche su iPad (la barra del sistema era
+      sottile o a scomparsa).
+   2) Struttura: gli assiemi si aprono chiusi; tasti "Comprimi tutto" ed
+      "Espandi tutto" nella testata.
+   3) Tavola: il clic col mouse sul bianco del foglio non trascina più il
+      foglio (si sposta con la rotella premuta o con due dita).
+   ===================================================================== */
+{
+  const panel = $('#pTree .panel'), pb = $('#pTree .pb');
+  const rail = document.createElement('div'); rail.className = 'sb123'; rail.innerHTML = '<div class="sb123t"></div>'; panel.appendChild(rail);
+  const th = rail.firstChild;
+  const upd = () => {
+    const h = pb.clientHeight, H = pb.scrollHeight;
+    if (!h || H <= h + 1) { rail.hidden = true; return; }
+    rail.hidden = false;
+    rail.style.top = pb.offsetTop + 'px'; rail.style.height = h + 'px';
+    const tH = Math.max(32, h * h / H), tY = (h - tH) * pb.scrollTop / (H - h);
+    th.style.height = tH + 'px'; th.style.transform = `translateY(${tY}px)`;
+  };
+  pb.addEventListener('scroll', upd, { passive: true });
+  new ResizeObserver(upd).observe(pb);
+  new MutationObserver(() => requestAnimationFrame(upd)).observe($('#tree'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'hidden'] });
+  let dr = null;
+  rail.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation(); rail.setPointerCapture(e.pointerId);
+    const r = rail.getBoundingClientRect(), tr = th.getBoundingClientRect(), h = pb.clientHeight, H = pb.scrollHeight, tH = tr.height;
+    if (e.clientY < tr.top || e.clientY > tr.bottom) { pb.scrollTop = Math.max(0, Math.min(H - h, (e.clientY - r.top - tH / 2) / (h - tH) * (H - h))); }
+    dr = { y: e.clientY, s: pb.scrollTop, k: (H - h) / Math.max(1, h - tH) }; rail.classList.add('on');
+  });
+  rail.addEventListener('pointermove', e => { if (!dr) return; e.preventDefault(); pb.scrollTop = dr.s + (e.clientY - dr.y) * dr.k; });
+  const end = () => { dr = null; rail.classList.remove('on'); };
+  rail.addEventListener('pointerup', end); rail.addEventListener('pointercancel', end);
+  rail.addEventListener('wheel', e => { pb.scrollTop += e.deltaY; e.preventDefault(); }, { passive: false });
+  setTimeout(upd, 300);
+  // Comprimi / Espandi tutto
+  const ph = $('#pTree .ph'), sa = $('#bShowAll');
+  const mk = (id, t, ico) => { const b = document.createElement('button'); b.className = 'mini ib123'; b.id = id; b.title = t; b.setAttribute('aria-label', t); b.innerHTML = SVG47(ico); return b; };
+  const bc = mk('bTreeCol', 'Comprimi tutto', '<path d="M7 4l5 5 5-5M7 20l5-5 5 5"/>'), be = mk('bTreeExp', 'Espandi tutto', '<path d="M7 9l5-5 5 5M7 15l5 5 5-5"/>');
+  sa.before(bc, be);
+  const walk = (n, f) => { if (!n || n.leaf) return; f(n); (n.children || []).forEach(c => walk(c, f)); };
+  bc.onclick = () => { walk(S.root, n => n._open = false); $$('#tree .tn').forEach(w => w.classList.remove('open')); upd(); };
+  be.onclick = () => { walk(S.root, n => n._open = true); $$('#tree .tn').forEach(w => { if (!w.classList.contains('leafn')) w.classList.add('open'); }); upd(); };
+  Object.assign(HELP, { 'id:bTreeCol': ['Comprimi tutto', 'Chiude tutti gli assiemi nella struttura.'], 'id:bTreeExp': ['Espandi tutto', 'Apre tutti gli assiemi nella struttura.'] });
+}
+/* ---------------- Tavola: linee sottili a qualsiasi zoom ----------------
+   Sullo schermo lo spessore delle linee non cresce più con lo zoom: resta
+   quello della vista intera (linee grosse / sottili / nascoste mantengono
+   la proporzione). Stampa, PDF, SVG e DXF restano con gli spessori veri. */
+const THIN123 = { pxmm: 2.0 };
+function thin123(root) {
+  if (!root) return; const svg = tvSvg(); if (!svg) return;
+  const R = svg.getScreenCTM && svg.getScreenCTM(); if (!R) return;
+  const base = Math.hypot(R.a, R.b) || 1, cache = new Map();
+  root.querySelectorAll('line,path,polyline,polygon,rect,circle,ellipse').forEach(el => {
+    if (el.dataset.t123) return;
+    const cs = getComputedStyle(el); if (!cs.stroke || cs.stroke === 'none') return;
+    const w = parseFloat(cs.strokeWidth); if (!(w > 0)) return;
+    let k; const own = el.hasAttribute('transform');
+    if (!own && cache.has(el.parentNode)) k = cache.get(el.parentNode);
+    else { const M = el.getScreenCTM(); k = M ? Math.hypot(M.a, M.b) / base : 1; if (!own) cache.set(el.parentNode, k); }
+    const mm = w * k;
+    el.style.vectorEffect = 'non-scaling-stroke';
+    el.style.strokeWidth = Math.max(0.6, mm * THIN123.pxmm).toFixed(2) + 'px';
+    const da = cs.strokeDasharray; if (da && da !== 'none') el.style.strokeDasharray = da.split(/[ ,]+/).filter(Boolean).map(x => (parseFloat(x) * k * THIN123.pxmm).toFixed(2) + 'px').join(' ');
+    el.dataset.t123 = 1;
+  });
+}
+{
+  const fix = () => { try { thin123(tvRoot()); thin123(tvHud()); } catch (e) {} };
+  const _r = tvRender; tvRender = function () { const x = _r.apply(this, arguments); fix(); return x; };
+  const _rl = tvRenderLight; tvRenderLight = function () { const x = _rl.apply(this, arguments); fix(); return x; };
+  const _h = tvHudDraw; tvHudDraw = function () { const x = _h.apply(this, arguments); try { thin123(tvHud()); } catch (e) {} return x; };
+  // Z: tutto il foglio (come "zoom tutto" del 3D)
+  window.addEventListener('keydown', e => {
+    if (!tvOn() || e.ctrlKey || e.metaKey || e.altKey || (e.key || '').toLowerCase() !== 'z') return;
+    if (e.target && e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) return;
+    e.preventDefault(); e.stopImmediatePropagation(); tvFit();
+  }, true);
 }
 
 /* ---------- vista ---------- */
